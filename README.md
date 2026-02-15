@@ -98,6 +98,40 @@ TEST
 
 Также, можете почитать rMachIPC() из файла src/ipc.py.
 
+# Потребление памяти.
+Вот тест памяти:
+```python
+from sched import *
+from ipc import *
+import gc
+
+sched = PrioSched()
+ipc = rMachIPC()
+kernel = Kernel(sched, ipc)
+
+gc.collect()
+
+free = gc.mem_free()
+alloc = gc.mem_alloc()
+total = free + alloc
+
+usage_pct = (alloc / total) * 100
+
+f_kb = free / 1024
+a_kb = alloc / 1024
+
+print(f"{f_kb:.1f}")
+print(f"{a_kb:.1f} ({usage_pct:.2f}%)")
+````
+Результат:
+```
+181.5
+19.4 (9.65%)
+````
+181.5 - свободно КБ.
+19.4 - КБ используеться.
+9.65% занято.
+
 # Что делать если проблемы с написанием?
 Во-первых - платформа ещё в тестировании.
 
