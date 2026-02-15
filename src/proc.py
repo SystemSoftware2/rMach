@@ -329,6 +329,6 @@ class VirtualMachine:
         self.pc = pc
         self.stack = stack
         self.env = env
-        
 
-        return env.get('exitcode', 0)
+        return i
+
