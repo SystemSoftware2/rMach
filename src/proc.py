@@ -249,11 +249,12 @@ class VirtualMachine:
                     break
                 elif status == PORT_DIED_NAME:
                     stack.append('DIED')
-                    pc += 1
-                
-                if status == PORT_SUCCESS:
+                elif status == PORT_SUCCESS:
                     stack.append(msg)
-                    pc += 1
+                else:
+                    stack.append(0)
+                    
+                pc += 1
             elif op == LIST:
                 count = stack.pop()
                 
@@ -329,4 +330,5 @@ class VirtualMachine:
         self.stack = stack
         self.env = env
         
+
         return env.get('exitcode', 0)
