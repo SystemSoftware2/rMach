@@ -139,9 +139,7 @@ class Kernel:
                 else:
                     res = (quantum > 0) * quantum + (not quantum > 0) * len(vm.program)
                 
-                p_info['cycles'] += res
-                
-                vm.make_step(res)
+                p_info['cycles'] += vm.make_step(res)
                 
                 if vm.state == WAITING:
                     ps.transition('MACH_MSG_WAIT')
