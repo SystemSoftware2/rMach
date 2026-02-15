@@ -119,7 +119,7 @@ class Kernel:
             p_info = self.procs[pid]
             ps = p_info['state']
             
-            if ps.current == 'WAITING':
+            if ps.current == WAITING:
                 continue
             elif p_info['cycles'] > max_cycles:
                 if (system_pids and not pid in system_pids) or not system_pids:
