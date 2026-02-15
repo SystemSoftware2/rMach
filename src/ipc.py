@@ -182,9 +182,9 @@ class rMachIPC:
                 target_port.rights_buffer.append(port_id)
                 
     def cleanup_process(self, pid):
-        prefix = pid << 5
-        for key in [k for k in rights if (k & ~0x1F) == prefix]:
-            port_id = key & 0x1F
+        prefix = pid << 16
+        for key in [k for k in rights if (k & ~0xFFFF) == prefix]:
+            port_id = key & 0xFFFF
             port_obj = self.ports.get(port_id)
             if port_obj:
                 port_obj.release(port_id, self)
