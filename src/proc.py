@@ -74,24 +74,36 @@ class Assembler:
                 else:
                     expanded_lines.append(line)
 
-        bytecode = []
+        labels = {}
+        pc = 0
+        final_code_lines = []
+        
         for line in expanded_lines:
-            parts = line.split('#')[0].strip().split()
-            if not parts: continue
+            line = line.split('#')[0].strip()
+            if not line: continue
             
+            if line.startswith(':'):
+                labels[line.upper()] = pc
+            else:
+                final_code_lines.append(line)
+                cmd = line.split()[0].upper()
+                if cmd in self.ops:
+                    pc += self.ops[cmd][1]
+
+        bytecode = []
+        for line in final_code_lines:
+            parts = line.split()
             cmd = parts[0].upper()
-            if cmd not in self.ops:
-                bytecode.append(HALT)
-                break
-                
+            
             op_code, length = self.ops[cmd]
             bytecode.append(op_code)
             
             if length == 2:
-                if len(parts) > 1:
-                    bytecode.append(self.atom(parts[1]))
+                arg = parts[1] if len(parts) > 1 else 0
+                if isinstance(arg, str) and arg.upper() in labels:
+                    bytecode.append(labels[arg.upper()])
                 else:
-                    bytecode.append(0)
+                    bytecode.append(self.atom(arg))
                     
         return bytecode
     
@@ -331,4 +343,5 @@ class VirtualMachine:
         self.env = env
 
         return i
+
 
