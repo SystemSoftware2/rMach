@@ -106,3 +106,7 @@ TEST
 dimasoft976@gmail.com
 
 Мой gmail, пишите что хотите.
+
+Кстати.
+
+Если увидите DIED в конце работы main.py - это нормально. Просто там небольшой race condition.
