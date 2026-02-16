@@ -41,14 +41,12 @@ class Assembler:
         self.macros = {}
 
     def atom(self, val):
-        if not isinstance(val, str):
-            return val
         s = val.lstrip('-')
         if s.isdigit():
             return int(val)
         elif '.' in s and s.replace('.', '', 1).isdigit():
             return float(val)
-        return val
+        return val.replace('^', ' ').replace('~', '\n')
 
     def assemble(self, source):
         raw_lines = [l.strip() for l in source.split('\n') if l.strip() and not l.startswith('#')]
@@ -343,5 +341,6 @@ class VirtualMachine:
         self.env = env
 
         return i
+
 
 
