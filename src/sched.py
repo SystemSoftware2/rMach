@@ -121,9 +121,6 @@ class Kernel:
             
             if ps.current == WAITING:
                 continue
-            elif p_info['cycles'] > max_cycles:
-                if (system_pids and not pid in system_pids) or not system_pids:
-                    self.exit_proc(pid)
         
             ps.transition('RUNNING')
             
