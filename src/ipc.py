@@ -194,7 +194,7 @@ class rMachIPC:
     def destroy_port(self, port_id):
         if port_id in self.ports:
             del self.ports[port_id]
-            keys_to_del = [k for k in rights if (k & 0x1F) == port_id]
+            keys_to_del = [k for k in rights if (k & 0xFFFF) == port_id]
             for k in keys_to_del:
                 del rights[k]
             ports_add(port_id)
