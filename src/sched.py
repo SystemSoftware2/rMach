@@ -93,7 +93,6 @@ class Kernel:
             'prio': prio,
             'vm': vm,
             'closed_count': 0,
-            'cycles': 0
         }
         
         self.procs[pid]['state'].bind('MACH_MSG_READY', lambda p, e: self.sched.wake_up(p, self.procs[p]['prio']))
@@ -135,8 +134,6 @@ class Kernel:
                     res = (quantum > 0) * quantum + (not quantum > 0) * 8
                 else:
                     res = (quantum > 0) * quantum + (not quantum > 0) * len(vm.program)
-                
-                p_info['cycles'] += vm.make_step(res)
                 
                 if vm.state == WAITING:
                     ps.transition('MACH_MSG_WAIT')
