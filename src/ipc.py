@@ -119,7 +119,7 @@ class rMachIPC:
                     if reply_port_obj:
                         add_right(remote_port, msg[1], SERVER, reply_port_obj)
                 try:
-                    self.py_handlers[remote_port](msg, self)
+                    self.py_handlers[remote_port](remote_port, msg, self)
                 except:
                     pass
                 return PORT_SUCCESS, None
