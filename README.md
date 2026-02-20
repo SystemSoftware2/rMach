@@ -139,8 +139,7 @@ ipc_obj.syscall_send(py_handler_id, msg[1], res)
 Пример такого хандлера:
 ```python
 def my_handler(msg, ipc):
-    #допустим наш id - 1
-    ipc.syscall_send(1, msg[1], 'hello!')
+    ipc.syscall_send(msg[0], msg[1], 'hello!')
 ````
 Ещё предупреждаю - не пишите циклы в py handler'ах. Они не вытесняются и не планируются.
 
