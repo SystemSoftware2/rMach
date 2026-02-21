@@ -141,7 +141,7 @@ class Kernel:
                     ps.transition('MACH_MSG_WAIT')
                 elif vm.state == CLOSED:
                     self.exit_proc(pid)
-            except Exception as err:
+            except Exception:
                 if p_info['closed_count'] == 3 and (system_pids and not pid in system_pids):
                     ps.transition('CLOSED')
                     if pid in self.procs:
