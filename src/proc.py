@@ -1,6 +1,6 @@
 from consts import *
 
-CLOSED, RUNNING, WAITING, READY = 1, 2, 3, 4
+READY = 4
 
 class ProcessState:
     def __init__(self, pid):
@@ -46,6 +46,8 @@ class Assembler:
             return int(val)
         elif '.' in s and s.replace('.', '', 1).isdigit():
             return float(val)
+        if len(val) > 128:
+            return val[0:8].replace('^', ' ').replace('~', '\n')
         return val.replace('^', ' ').replace('~', '\n')
 
     def assemble(self, source):
@@ -125,6 +127,9 @@ class VirtualMachine:
         self.stack = []
         self.env = {'exitcode': 0}
         self.ports_count = 0
+
+    def save_ctx(self, sc, env, pc):
+        self.stack, self.env, self.pc = sc, env, pc
     
     def make_step(self, quantum=3):
         if self.ended == 1:
@@ -139,17 +144,17 @@ class VirtualMachine:
         if pc >= len(self.program):
             self.state = CLOSED
             self.program = []
-            return 0
+            return None
         
         for i in range(quantum):
             if pc >= len(self.program):
                 self.state = CLOSED
                 self.program = []
-                return 0
+                return None
             if len(stack) > 32:
                 self.state = CLOSED
                 self.ended = 1
-                return 0
+                return None
                 
             op = program[pc]
             if pc < len(program) - 1:
@@ -247,7 +252,11 @@ class VirtualMachine:
                 pc += 1
                 
                 if status == PORT_HANDOFF:
-                    break
+                    self.save_ctx(stack, env, pc)
+                    return target_pid
+                elif status == PORT_BUFFERED:
+                    self.save_ctx(stack, env, pc)
+                    return self.ipc.get_owner_port(remote_port)
             elif op == RECV:
                 port_id = stack.pop()
                     
@@ -267,6 +276,11 @@ class VirtualMachine:
                 pc += 1
             elif op == LIST:
                 count = stack.pop()
+
+                if count > 48:
+                    self.state = CLOSED
+                    self.ended = 1
+                    return None
                 
                 res = []
                 for i in range(count):
@@ -278,6 +292,11 @@ class VirtualMachine:
                 pc += 1
             elif op == DICT:
                 count = stack.pop()
+
+                if count > 64:
+                    self.state = CLOSED
+                    self.ended = 1
+                    return None
                 
                 raw_data = []
                 for _ in range(count):
@@ -334,13 +353,7 @@ class VirtualMachine:
             elif op == HALT:
                 self.state = CLOSED
                 self.ended = 1
-                return env['exitcode']
+                return None
 
-        self.pc = pc
-        self.stack = stack
-        self.env = env
-
-        return i
-
-
+        self.save_ctx(stack, env, pc)
 
