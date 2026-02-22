@@ -154,7 +154,7 @@ class Kernel:
 
             target_pid = self.run_task(vm, big_f, p_info, ps, system_pids, pid)
 
-            if target_pid in self.procs and target_pid != pid:
+            if target_pid in self.procs:
                 passes = 0
                 current_target = target_pid
                 
