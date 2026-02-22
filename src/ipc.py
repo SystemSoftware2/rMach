@@ -7,7 +7,7 @@ SEND = 0b01
 RECEIVE = 0b11
 SERVER = 0b100
 
-dead_ports = 0
+dead_ports = set()
 
 def add_right(pid, port_id, rtype, port):
     key = (pid << 16) | port_id
@@ -41,12 +41,12 @@ def check(pid, port_id, required_perm):
 
 def ports_add(port_id):
     global dead_ports
-    dead_ports |= (1 << port_id)
+    dead_ports.add(port_id)
     
 def ports_get(port_id):
-    if (dead_ports >> port_id) & 1:
-        return port_id
-    return None
+    if port_id in dead_ports:
+        return 1
+    return 0
 
 class rMachPort:
     def __init__(self):
