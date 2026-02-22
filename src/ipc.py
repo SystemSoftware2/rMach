@@ -127,7 +127,7 @@ class rMachIPC:
                 try:
                     self.py_handlers[remote_port](msg, self)
                 except:
-                    pass
+                    self.syscall_send(remote_port, (msg[1], 0, HANDLER_ERROR))
                 return PORT_SUCCESS, None
             return PORT_ERR_INVALID_NAME, None
         
