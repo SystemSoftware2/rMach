@@ -108,7 +108,34 @@ class Kernel:
             if pid in q_list:
                 q_list.remove(pid)
 
-    def kernel_loop(self, max_cycles=255, system_pids=None, big_f=False):
+    def run_task(self, vm, big_f, p_info,
+                 ps, system_pids, pid):
+        try:
+            quantum = (len(vm.program) >> 3) - 8
+                
+            res = None
+                
+            if big_f:
+                res = (quantum > 0) * quantum + (not quantum > 0) * 8
+            else:
+                res = (quantum > 0) * quantum + (not quantum > 0) * len(vm.program)
+
+            r = vm.make_step(res)
+                
+            if vm.state == WAITING:
+                ps.transition('MACH_MSG_WAIT')
+            elif vm.state == CLOSED:
+                self.exit_proc(pid)
+            return r
+        except:
+            if p_info['closed_count'] == 3 and (system_pids and not pid in system_pids):
+                ps.transition('CLOSED')
+                if pid in self.procs:
+                    self.exit_proc(pid)
+            else:
+                p_info['closed_count'] += 1
+
+    def kernel_loop(self, system_pids=None, big_f=False):
         while self.procs:
             try:
                 pid = self.sched.get_next_proc()
@@ -124,31 +151,27 @@ class Kernel:
             ps.transition('RUNNING')
             
             vm = p_info['vm']
-            
-            try:
-                quantum = (len(vm.program) >> 3) - 8
-                
-                res = None
-                
-                if big_f:
-                    res = (quantum > 0) * quantum + (not quantum > 0) * 8
-                else:
-                    res = (quantum > 0) * quantum + (not quantum > 0) * len(vm.program)
 
-                vm.make_step(res)
+            target_pid = self.run_task(vm, big_f, p_info, ps, system_pids, pid)
+
+            if target_pid in self.procs and target_pid != pid:
+                passes = 0
+                current_target = target_pid
                 
-                if vm.state == WAITING:
-                    ps.transition('MACH_MSG_WAIT')
-                elif vm.state == CLOSED:
-                    self.exit_proc(pid)
-            except Exception:
-                if p_info['closed_count'] == 3 and (system_pids and not pid in system_pids):
-                    ps.transition('CLOSED')
-                    if pid in self.procs:
-                        self.exit_proc(pid)
-                else:
-                    p_info['closed_count'] += 1
-                continue
+                while current_target in self.procs and passes < 3:
+                    tp_info = self.procs[current_target]
+
+                    if tp_info['vm'].ended == 1:
+                        break
+                    
+                    next_target = self.run_task(tp_info['vm'], big_f, tp_info,
+                                                tp_info['state'], system_pids, current_target)
+                    passes += 1
+                    
+                    if next_target in self.procs and next_target != current_target:
+                        current_target = next_target
+                    else:
+                        break
 
             if ps.current == 'RUNNING':
                 if self.sched.tick(pid):
