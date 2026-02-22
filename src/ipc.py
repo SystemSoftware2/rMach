@@ -99,6 +99,12 @@ class rMachIPC:
         self.py_handlers[self.port_counter] = func
         return self.port_counter
 
+    def get_owner_port(self, port_id):
+        target_port = self.ports.get(port_id)
+        if target_port:
+            return target_port.owner_pid
+        return None
+
     def send(self, pid, msg):
         if not len(msg) == 3:
             return PORT_ERR_INVALID_NAME, None
