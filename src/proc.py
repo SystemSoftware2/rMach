@@ -242,8 +242,6 @@ class VirtualMachine:
                     self.state = WAITING
                     stack.append(port_id)
                     break
-                elif status == PORT_DIED_NAME:
-                    stack.append('DIED')
                 elif status == PORT_SUCCESS:
                     stack.append(msg)
                 else:
@@ -332,5 +330,6 @@ class VirtualMachine:
                 return None
 
         self.save_ctx(stack, env, pc)
+
 
 
