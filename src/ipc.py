@@ -7,8 +7,6 @@ SEND = 0b01
 RECEIVE = 0b11
 SERVER = 0b100
 
-dead_ports = set()
-
 def add_right(pid, port_id, rtype, port):
     key = (pid << 16) | port_id
     
@@ -39,17 +37,9 @@ def consume_right(pid, port_id, port, ipc):
 def check(pid, port_id, required_perm):
     return (rights.get((pid << 16) | port_id, 0) & required_perm) == required_perm
 
-def ports_add(port_id):
-    global dead_ports
-    dead_ports.add(port_id)
-    
-def ports_get(port_id):
-    if port_id in dead_ports:
-        return 1
-    return 0
-
 class rMachPort:
-    def __init__(self):
+    def __init__(self, own):
+        self.owner_pid = own
         self.ref_count = 0
         self.messages = deque((), 32)
         self.blocked_threads = deque((), 32)
@@ -85,11 +75,12 @@ class rMachIPC:
         self.ports = {}
         self.port_counter = 0
         self.py_handlers = {}
+        self.sched = None
 
     def create_port(self, pid):
         self.port_counter += 1
         p_id = self.port_counter
-        port = rMachPort()
+        port = rMachPort(pid)
         self.ports[p_id] = port
         add_right(pid, p_id, RECEIVE, port)
         return p_id
@@ -104,14 +95,12 @@ class rMachIPC:
         if target_port:
             return target_port.owner_pid
         return None
-
+        
     def send(self, pid, msg):
         if not len(msg) == 3:
             return PORT_ERR_INVALID_NAME, None
         
         remote_port = msg[0]
-        if ports_get(remote_port):
-            return PORT_DIED_NAME, None
         
         target_port = self.ports.get(remote_port)
         
@@ -144,8 +133,6 @@ class rMachIPC:
             return PORT_ERR_INVALID_NAME, None
         
         remote_port_id = msg[0]
-        if ports_get(remote_port_id):
-            return PORT_DIED_NAME, None
     
         if not check(py_handler, remote_port_id, SERVER):
             return PORT_ERR_NO_RIGHT, None
@@ -156,13 +143,14 @@ class rMachIPC:
         
         target_port.put(msg[2], right_id=msg[1])
         consume_right(py_handler, remote_port_id, target_port, self)
+
+        if target_port.blocked_threads:
+            target_pid = target_port.blocked_threads.popleft()
+            self.sched.wake_up(target_pid, self.getprio(target_pid))
         
         return PORT_SUCCESS, None
     
     def receive(self, pid, port_id):
-        if ports_get(port_id):
-            return None, PORT_DIED_NAME
-        
         port_obj = self.ports.get(port_id)
         if not port_obj:
             return None, PORT_ERR_INVALID_NAME
