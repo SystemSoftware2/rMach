@@ -75,11 +75,9 @@ class Kernel:
         self.sched = scheduler
         self.asm = Assembler()
         self.ipc = ipc
+        self.ipc.sched = self.sched
+        self.ipc.getprio = lambda pid: self.procs[pid]['prio']
         self.procs = {}
-
-    def set_bind(self, pid, event, callback):
-        if pid in self.procs:
-            self.procs[pid]['state'].bind(event, callback)
 
     def spawn(self, pid, prio, code):
         binary = self.asm.assemble(code)
@@ -89,13 +87,12 @@ class Kernel:
         gc.collect()
         
         self.procs[pid] = {
-            'state': ProcessState(pid),
+            'state': READY,
             'prio': prio,
             'vm': vm,
             'closed_count': 0,
         }
         
-        self.procs[pid]['state'].bind('MACH_MSG_READY', lambda p, e: self.sched.wake_up(p, self.procs[p]['prio']))
         self.sched.create_proc(pid, prio)
         
     def exit_proc(self, pid):
@@ -109,7 +106,7 @@ class Kernel:
                 q_list.remove(pid)
 
     def run_task(self, vm, big_f, p_info,
-                 ps, system_pids, pid):
+                 system_pids, pid):
         try:
             quantum = (len(vm.program) >> 3) - 8
                 
@@ -123,13 +120,13 @@ class Kernel:
             r = vm.make_step(res)
                 
             if vm.state == WAITING:
-                ps.transition('MACH_MSG_WAIT')
+                p_info['state'] = WAITING
             elif vm.state == CLOSED:
                 self.exit_proc(pid)
             return r
         except:
             if p_info['closed_count'] == 3 and (system_pids and not pid in system_pids):
-                ps.transition('CLOSED')
+                p_info['state'] = CLOSED
                 if pid in self.procs:
                     self.exit_proc(pid)
             else:
@@ -143,18 +140,17 @@ class Kernel:
                 continue
 
             p_info = self.procs[pid]
-            ps = p_info['state']
             
-            if ps.current == WAITING:
+            if p_info['state'] == WAITING:
                 continue
         
-            ps.transition('RUNNING')
+            p_info['state'] = RUNNING
             
             vm = p_info['vm']
 
-            target_pid = self.run_task(vm, big_f, p_info, ps, system_pids, pid)
+            target_pid = self.run_task(vm, big_f, p_info, system_pids, pid)
 
-            if target_pid in self.procs:
+            if target_pid in self.procs and target_pid != pid:
                 passes = 0
                 current_target = target_pid
                 
@@ -165,7 +161,7 @@ class Kernel:
                         break
                     
                     next_target = self.run_task(tp_info['vm'], big_f, tp_info,
-                                                tp_info['state'], system_pids, current_target)
+                                                system_pids, current_target)
                     passes += 1
                     
                     if next_target in self.procs and next_target != current_target:
@@ -173,6 +169,6 @@ class Kernel:
                     else:
                         break
 
-            if ps.current == 'RUNNING':
+            if p_info['state'] == RUNNING:
                 if self.sched.tick(pid):
-                    ps.transition('READY')
+                    p_info['state'] = READY
