@@ -1,29 +1,5 @@
 from consts import *
 
-READY = 4
-
-class ProcessState:
-    def __init__(self, pid):
-        self.pid = pid
-        self.current = READY
-        self.bindings = {}
-
-    def bind(self, event, callback):
-        self.bindings[event] = callback
-
-    def transition(self, event):
-        if event in self.bindings:
-            self.bindings[event](self.pid, event)
-
-        if event == 'MACH_MSG_WAIT':
-            self.current = WAITING
-        elif event == 'MACH_MSG_READY':
-            self.current = READY
-        elif event == 'RUNNING':
-            self.current = RUNNING
-        elif event == 'CLOSED':
-            self.current = CLOSED
-
 FETCH, STORE, PUSH, POP, ADD, SUB, MUL, DIV, LT, GT, EQ, NOTEQ, JZ, JNZ, JMP, RECV, SEND = range(17)
 LIST, DICT, INDEX, CREATE_PORT, APPEND, RETURN, PRINT, HALT = range(17, 25)
  
@@ -107,7 +83,7 @@ class Assembler:
                     
         return bytecode
     
-CLOSED, RUNNING, WAITING = 1, 2, 3
+CLOSED, RUNNING, WAITING, READY = 1, 2, 3, 4
 
 class VirtualMachine:
     def __init__(self, ipc, pid):
@@ -356,4 +332,5 @@ class VirtualMachine:
                 return None
 
         self.save_ctx(stack, env, pc)
+
 
