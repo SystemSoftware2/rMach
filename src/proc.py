@@ -302,6 +302,12 @@ class VirtualMachine:
                 pc += 1
             elif op == APPEND:
                 obj = env[arg]
+                if ((type(obj) is list) and len(obj) >= 48) or \
+                   ((type(obj) is dict) and len(obj) >= 64):
+                    self.state = CLOSED
+                    self.ended = 1
+                    return None
+             
                 if type(obj) is dict:
                     key = stack.pop()
                     val = stack.pop()
@@ -330,6 +336,7 @@ class VirtualMachine:
                 return None
 
         self.save_ctx(stack, env, pc)
+
 
 
 
