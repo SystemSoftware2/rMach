@@ -54,7 +54,7 @@ class rMachPort:
 
     def put(self, data):
         if len(self.messages) >= 32:
-            return 
+            return self.owner_pid
         
         if self.blocked:
             self.blocked = False
