@@ -42,8 +42,7 @@ class rMachPort:
         self.owner_pid = own
         self.ref_count = 0
         self.messages = deque((), 32)
-        self.blocked_threads = deque((), 32)
-        self.rights_buffer = deque((), 32)
+        self.blocked = None
 
     def retain(self):
         self.ref_count += 1
@@ -53,21 +52,21 @@ class rMachPort:
         if self.ref_count == 0:
             ipc.destroy_port(port_id)
 
-    def put(self, data, right_id=None):
-        packet = (data, right_id)
-        if self.blocked_threads:
-            target = self.blocked_threads.popleft()
-            self.messages.append(packet)
-            return target
+    def put(self, data):
+        if len(self.messages) >= 32:
+            return 
         
-        self.messages.append(packet)
-        return None
+        if self.blocked:
+            self.blocked = False
+        
+        self.messages.append(data)
+        return self.owner_pid
 
-    def read(self, thread_id):
+    def read(self):
         if self.messages:
             return self.messages.popleft(), PORT_SUCCESS
         
-        self.blocked_threads.append(thread_id)
+        self.blocked = True
         return None, PORT_BUFFERED
 
 class rMachIPC:
@@ -89,12 +88,6 @@ class rMachIPC:
         self.port_counter += 1
         self.py_handlers[self.port_counter] = func
         return self.port_counter
-
-    def get_owner_port(self, port_id):
-        target_port = self.ports.get(port_id)
-        if target_port:
-            return target_port.owner_pid
-        return None
         
     def send(self, pid, msg):
         if not len(msg) == 3:
@@ -104,8 +97,9 @@ class rMachIPC:
         
         target_port = self.ports.get(remote_port)
         
-        if not check(pid, remote_port, SEND):
-            return PORT_ERR_NO_RIGHT, None
+        if not (check(pid, remote_port, SEND) or \
+            check(pid, remote_port, SERVER)):
+                return PORT_ERR_NO_RIGHT, None
         
         if not target_port:
             if remote_port in self.py_handlers:
@@ -120,35 +114,45 @@ class rMachIPC:
                 return PORT_SUCCESS, None
             return PORT_ERR_INVALID_NAME, None
         
-        target_pid = target_port.put(msg[2], right_id=msg[1])
-        if target_pid:
-            return PORT_HANDOFF, target_pid
-        return PORT_BUFFERED, None
-    
+        target_pid = target_port.put(msg[2])
+
+        consume_right(pid, remote_port, target_port, self)
+        
+        if msg[1]:
+            reply_port_obj = self.ports.get(msg[1], 0)
+            self.transfer_right(pid, target_port.owner_pid, msg[1])
+
+        return PORT_HANDOFF, target_pid
+  
     def syscall_send(self, py_handler, msg):
         if not len(msg) == 3:
-            return PORT_ERR_INVALID_NAME, None
+            return PORT_ERR_INVALID_NAME
         
         if py_handler not in self.py_handlers:
-            return PORT_ERR_INVALID_NAME, None
+            return PORT_ERR_INVALID_NAME
         
         remote_port_id = msg[0]
     
         if not check(py_handler, remote_port_id, SERVER):
-            return PORT_ERR_NO_RIGHT, None
+            return PORT_ERR_NO_RIGHT
         
         target_port = self.ports.get(remote_port_id)
         if not target_port:
-            return PORT_ERR_INVALID_NAME, None
+            return PORT_ERR_INVALID_NAME
         
-        target_port.put(msg[2], right_id=msg[1])
+        target_port.put(msg[2])
         consume_right(py_handler, remote_port_id, target_port, self)
 
-        if target_port.blocked_threads:
-            target_pid = target_port.blocked_threads.popleft()
-            self.sched.wake_up(target_pid, self.getprio(target_pid))
+        if target_port.blocked:
+            target_port.blocked = False
+            self.sched.wake_up(target_port.owner_pid,
+                               self.getprio(target_port.owner_pid))
+            
+        if msg[1]:
+            reply_port_obj = self.ports.get(msg[1], 0)
+            self.transfer_right(py_handler, target_port.owner_pid, msg[1])
         
-        return PORT_SUCCESS, None
+        return PORT_SUCCESS
     
     def receive(self, pid, port_id):
         port_obj = self.ports.get(port_id)
@@ -158,32 +162,28 @@ class rMachIPC:
         if not check(pid, port_id, RECEIVE):
             return None, PORT_ERR_NO_RIGHT
 
-        packet, status = port_obj.read(pid)
+        packet, status = port_obj.read()
         if status == PORT_SUCCESS:
-            data_payload, transfer_id = packet
-            if transfer_id:
-                target_port_obj = self.ports.get(transfer_id)
-                if target_port_obj:
-                    add_right(pid, transfer_id, SEND, target_port_obj)
-            return data_payload, PORT_SUCCESS
+            return packet, PORT_SUCCESS
         
         return None, status
 
-    def transfer_right(self, src_pid, dest_port_id, port_id):
+    def transfer_right(self, src_pid, dest_pid, port_id):
         if check(src_pid, port_id, SEND):
-            target_port = self.ports.get(dest_port_id)
-            if target_port:
-                target_port.rights_buffer.append(port_id)
+            if port_id in self.ports:
+                add_right(dest_pid, port_id, SEND, self.ports[port_id])
                 
     def cleanup_process(self, pid):
-        prefix = pid << 16
-        for key in [k for k in rights if (k & ~0xFFFF) == prefix]:
+        for key in [k for k in rights if (k >> 16) == pid]:
             port_id = key & 0xFFFF
             port_obj = self.ports.get(port_id)
             if port_obj:
                 port_obj.release(port_id, self)
             if key in rights:
-                del rights[key]
+                if rights[key] & RECEIVE:
+                    self.destroy_port(port_id)
+                else:
+                    del rights[key]
 
     def destroy_port(self, port_id):
         if port_id in self.ports:
@@ -191,6 +191,5 @@ class rMachIPC:
             keys_to_del = [k for k in rights if (k & 0xFFFF) == port_id]
             for k in keys_to_del:
                 del rights[k]
-            ports_add(port_id)
             return PORT_EXTINGUISHED
         return PORT_ERR_INVALID_NAME
